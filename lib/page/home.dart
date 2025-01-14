@@ -1,4 +1,6 @@
 import 'package:fluent_ui/fluent_ui.dart';
+import 'package:media_kit/media_kit.dart';
+import 'package:media_kit_video/media_kit_video.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -8,16 +10,35 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
+  // Create a [Player] to control playback.
+  late final player = Player();
+  // Create a [VideoController] to handle video output from [Player].
+  late final controller = VideoController(player);
+
+  @override
+  void initState() {
+    super.initState();
+    // Play a [Media] or [Playlist].
+    // Replace the URL with your RTSP stream URL.
+    player.open(Media(
+        'rtsp://192.168.1.149:8554/stream')); // Replace with your RTSP stream URL
+  }
+
+  @override
+  void dispose() {
+    player.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
-    return ScaffoldPage.scrollable(
-        header: PageHeader(
-          title: Text('Home'),
-        ), 
-        children: [
-          
-        ],
-
+    return Center(
+      child: SizedBox(
+        width: MediaQuery.of(context).size.width,
+        height: MediaQuery.of(context).size.width * 9.0 / 16.0,
+        // Use [Video] widget to display video output.
+        child: Video(controller: controller),
+      ),
     );
   }
 }

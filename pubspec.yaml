@@ -36,6 +36,10 @@ dependencies:
   cupertino_icons: ^1.0.8
   fluent_ui: ^4.10.0
   window_manager: ^0.4.3
+  system_theme: ^3.1.2
+  media_kit: ^1.1.11
+  media_kit_video: ^1.2.4             # For video rendering
+  media_kit_libs_video: ^1.0.4        # Native video dependencies
 
 dev_dependencies:
   flutter_test:

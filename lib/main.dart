@@ -1,11 +1,14 @@
 import 'package:desktop_app/page/home.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:window_manager/window_manager.dart';
-import 'package:flutter/services.dart';
+import 'package:media_kit/media_kit.dart';
 
-import 'package:flutter/services.dart';
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+  // Initialize MediaKit before running the app
+  MediaKit.ensureInitialized();
+
   WidgetsFlutterBinding.ensureInitialized();
 
   windowManager.ensureInitialized();
@@ -34,13 +37,16 @@ class MyApp extends StatelessWidget {
       themeMode: ThemeMode.system,
       theme: FluentThemeData(
         brightness: Brightness.light,
-        accentColor: Colors.orange,
-        
+        accentColor: Colors.purple,
+        scaffoldBackgroundColor: Colors.white,
         navigationPaneTheme: NavigationPaneThemeData(
-             tileColor: Color(0xFF027A48), // 
-            //  Color(0xFF027A48), // Background color for NavigationPane
+          labelPadding: EdgeInsets.symmetric(horizontal: 12.0),
 
-            ),
+          backgroundColor: Color(0xFF027A48),
+          paneNavigationButtonIcon: FluentIcons.navigation_flipper,
+
+          // Background color for NavigationPane
+        ),
       ),
       darkTheme: FluentThemeData(
           brightness: Brightness.dark, accentColor: Colors.orange),
@@ -63,7 +69,8 @@ class _MainPageState extends State<MainPage> {
   Widget build(BuildContext context) {
     return NavigationView(
       appBar: NavigationAppBar(
-        height: 50,
+        height: 41,
+        backgroundColor: Colors.white,
         leading: Padding(
           padding: const EdgeInsets.all(8.0),
           child: Image.asset(
@@ -74,12 +81,17 @@ class _MainPageState extends State<MainPage> {
         actions: WindownsButton(),
       ),
       pane: NavigationPane(
-        decoration: BoxDecoration(
-          color: Color(0xFF027A48),
-          // Change from BorderRadius.zero to specify which corners should be rounded
-          borderRadius: BorderRadius.only(
-            topRight: Radius.circular(8),
-            bottomRight: Radius.circular(8),
+        //indicator: null,
+
+        header: Padding(
+          padding: const EdgeInsets.only(top: 0),
+          child: Text(
+            'ParknGo',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+            ),
           ),
         ),
         size: NavigationPaneSize(
@@ -88,7 +100,9 @@ class _MainPageState extends State<MainPage> {
           openMinWidth: 250.0, // Minimum width when the pane is open
           openMaxWidth: 320.0, // Maximum width when the pane is open
         ),
+
         displayMode: PaneDisplayMode.compact,
+
         selected: PaneIndex,
         onItemPressed: (value) {
           setState(() {
@@ -98,40 +112,30 @@ class _MainPageState extends State<MainPage> {
         items: [
           PaneItem(
             icon: Center(
-              child: Icon(FluentIcons.t_v_monitor, size: 24),
+              child:
+                  Icon(FluentIcons.t_v_monitor, size: 24, color: Colors.white),
             ),
-            title: Text('Màn hình giám sát'),
+            title: Text('Màn hình giám sát',
+                style: TextStyle(color: Colors.white)),
             body: HomePage(),
           ),
           PaneItem(
             icon: Center(
-              child: Icon(FluentIcons.favorite_star, size: 24),
+              child: Icon(FluentIcons.favorite_star,
+                  size: 24, color: Colors.white),
             ),
-            title: Text('Favorite'),
+            title: Text('Favorite', style: TextStyle(color: Colors.white)),
             body: Container(),
           ),
         ],
         footerItems: [
           PaneItem(
             icon: Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(FluentIcons.contact, size: 24),
-                  SizedBox(height: 2),
-                  Icon(FluentIcons.sign_out, size: 24),
-                ],
-              ),
+              child: Icon(FluentIcons.contact, size: 24, color: Colors.white),
             ),
-            title: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Profile'),
-                SizedBox(height: 4),
-                Text('Đăng xuất'),
-              ],
-            ),
+            title: Text('baove1', style: TextStyle(color: Colors.white)),
             body: Container(),
+            trailing: Icon(FluentIcons.sign_out, size: 24, color: Colors.white),
           ),
         ],
       ),
