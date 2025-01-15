@@ -30,14 +30,28 @@ class _HomePageState extends State<HomePage> {
     super.dispose();
   }
 
+  
+
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: SizedBox(
-        width: MediaQuery.of(context).size.width,
-        height: MediaQuery.of(context).size.width * 9.0 / 16.0,
-        // Use [Video] widget to display video output.
-        child: Video(controller: controller),
+    return ScaffoldPage(
+      content: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Expanded(
+              child: Center(
+                child: FractionallySizedBox(
+                  widthFactor: 0.7, // Chiếm 70% chiều rộng màn hình
+                  child: AspectRatio(
+                    aspectRatio: 16 / 9,
+                    child: Video(controller: controller),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

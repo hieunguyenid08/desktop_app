@@ -40,6 +40,8 @@ dependencies:
   media_kit: ^1.1.11
   media_kit_video: ^1.2.4             # For video rendering
   media_kit_libs_video: ^1.0.4        # Native video dependencies
+  path: ^1.9.0
+  process_run: ^0.13.3
 
 dev_dependencies:
   flutter_test:
