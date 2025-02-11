@@ -216,8 +216,34 @@ class _HomePageState extends State<HomePage> {
     [0.314, 0.717, 0.741],
     [0.500, 0.500, 0.000]
   ];
+  // Assuming input is a List<List<List<int>>> with shape (640, 640, 3)
+  List<List<List<double>>> transposeMatrix(List<List<List<int>>> input) {
+    int height = input.length;
+    int width = input[0].length;
+    int channels = input[0][0].length;
 
-  (cv.Mat, double) preprocess(cv.Mat img, List<int> inputSize,
+    // Initialize output matrix with shape (3, 640, 640)
+    List<List<List<double>>> output = List.generate(
+      channels,
+      (_) => List.generate(
+        height,
+        (_) => List.generate(width, (_) => 0.0),
+      ),
+    );
+
+    // Perform the transpose
+    for (int c = 0; c < channels; c++) {
+      for (int h = 0; h < height; h++) {
+        for (int w = 0; w < width; w++) {
+          output[c][h][w] = input[h][w][c].toDouble();
+        }
+      }
+    }
+
+    return output;
+  }
+
+  (List<List<List<double>>>, double) preprocess(cv.Mat img, List<int> inputSize,
       {List<int> swap = const [2, 0, 1]}) {
     cv.Mat paddedImg;
 
@@ -239,7 +265,6 @@ class _HomePageState extends State<HomePage> {
     int newWidth = (img.cols * r).toInt();
     int newHeight = (img.rows * r).toInt();
 
-    
     cv.Mat resizedImg = cv.resize(
       img,
       (newWidth, newHeight),
@@ -248,44 +273,49 @@ class _HomePageState extends State<HomePage> {
     resizedImg.copyTo(paddedImg.region(cv.Rect(0, 0, newWidth, newHeight)));
 
     // Transpose the resized image to swap rows and columns
-   
+    List<List<List<int>>> matToList = List.generate(
+      paddedImg.rows,
+      (i) => List.generate(
+        paddedImg.cols,
+        (j) => List.generate(3, (k) => paddedImg.at<cv.Vec3b>(i, j).val[k]),
+      ),
+    );
 
-    return (paddedImg, r);
+    List<List<List<double>>> output = transposeMatrix(matToList);
+    // In ra 10 phần tử đầu tiên
+
+    return (output, r);
   }
 
-  // Future<void> runInference(cv.Mat paddedImg) async {
-  //   // Load model
-  //   final sessionOptions = OrtSessionOptions();
-  //   const assetFileName = 'assets/model/yolox_nano_640x640.onnx';
-  //   final rawAssetFile = await rootBundle.load(assetFileName);
-  //   final bytes = rawAssetFile.buffer.asUint8List();
-  //   final session = OrtSession.fromBuffer(bytes, sessionOptions);
-  //   final (processedImg, ratio) = preprocess(paddedImg, [640, 640]);
-  //   final shape = [
-  //     1,
-  //     640,
-  //     640,
-  //     3
-  //   ]; // Batch size = 1, Channels = 3, Height = 640, Width = 640
-  //   final flattenedList = processedImg
-  //       .toList()
-  //       .expand((e) => e)
-  //       .map((e) => e.toDouble())
-  //       .toList();
-  //   final inputOrt = OrtValueTensor.createTensorWithDataList(
-  //       Float32List.fromList(flattenedList), shape);
-  //   final inputs = {'images': inputOrt};
-  //   final runOptions = OrtRunOptions();
+  Future<void> runInference(cv.Mat paddedImg) async {
+    // Load model
+    final sessionOptions = OrtSessionOptions();
+    const assetFileName = 'assets/model/yolox_nano_640x640.onnx';
+    final rawAssetFile = await rootBundle.load(assetFileName);
+    final bytes = rawAssetFile.buffer.asUint8List();
+    final session = OrtSession.fromBuffer(bytes, sessionOptions);
+    final (processedImg, ratio) = preprocess(paddedImg, [640, 640]);
+    final shape = [
+      1,
+      640,
+      640,
+      3
+    ]; // Batch size = 1, Channels = 3, Height = 640, Width = 640
+    final flatList = processedImg.expand((c) => c.expand((h) => h)).toList();
+    final inputOrt = OrtValueTensor.createTensorWithDataList(
+        Float32List.fromList(flatList), shape);
+    final inputs = {'images': inputOrt};
+    final runOptions = OrtRunOptions();
 
-  //   final outputs = await session.runAsync(runOptions, inputs);
-  //   if (outputs != null) {}
-  //   print("Output names: ${outputs}");
-  //   inputOrt.release();
-  //   runOptions.release();
-  //   outputs?.forEach((element) {
-  //     element?.release();
-  //   });
-  // }
+    final outputs = await session.runAsync(runOptions, inputs);
+    if (outputs != null) {}
+    print("Output names: ${outputs}");
+    inputOrt.release();
+    runOptions.release();
+    outputs?.forEach((element) {
+      element?.release();
+    });
+  }
 
   //capture picture from video 1
   Future<void> captureScreenshot1() async {
@@ -316,8 +346,8 @@ class _HomePageState extends State<HomePage> {
         if (File(file.path).existsSync()) {
           final mat = cv.imread(file.path);
           print("Image loaded successfully");
-          final (processedImg, ratio) = preprocess(mat, [640, 640]);
-          //runInference(mat);
+          //final (processedImg, ratio) = preprocess(mat, [640, 640]);
+          runInference(mat);
         } else {
           print("Error: Image file does not exist at path: ${file.path}");
         }
