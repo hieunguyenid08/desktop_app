@@ -63,7 +63,7 @@ class MainPage extends StatefulWidget {
 }
 
 class _MainPageState extends State<MainPage> {
-  int PaneIndex = 0;
+  int paneIndex = 0;
 
   @override
   Widget build(BuildContext context) {
@@ -103,10 +103,10 @@ class _MainPageState extends State<MainPage> {
 
         displayMode: PaneDisplayMode.compact,
 
-        selected: PaneIndex,
+        selected: paneIndex,
         onItemPressed: (value) {
           setState(() {
-            PaneIndex = value;
+            paneIndex = value;
           });
         },
         items: [
