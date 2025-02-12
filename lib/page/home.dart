@@ -11,6 +11,7 @@ import 'dart:math' show min;
 import 'package:flutter/services.dart' show rootBundle;
 import 'dart:math' show max;
 import 'dart:typed_data';
+import 'dart:math' show exp;
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -282,11 +283,51 @@ class _HomePageState extends State<HomePage> {
     );
 
     List<List<List<double>>> output = transposeMatrix(matToList);
-    // In ra 10 phần tử đầu tiên
 
     return (output, r);
   }
+ List<double> demoPostprocess(OrtValue outputs, List<int> imgSize, {bool p6 = false}) {
+  // Correctly cast nested list structure
+  // final List<List<double>> nestedData = (outputs.value as List).cast<List<double>>();
+  // final List<double> data = nestedData[0]; // Get the first list
+  
+  // final List<int> strides = p6 ? [8, 16, 32, 64] : [8, 16, 32];
+   final List<double> data = (outputs.value as List<List<dynamic>>)[0].cast<double>();
+  
+  final List<int> strides = p6 ? [8, 16, 32, 64] : [8, 16, 32];
+  // Calculate grid sizes
+  final hsizes = strides.map((stride) => imgSize[0] ~/ stride).toList();
+  final wsizes = strides.map((stride) => imgSize[1] ~/ stride).toList();
+  
+  // Generate grids and strides
+  List<List<double>> grids = [];
+  List<double> expandedStrides = [];
+  
+  for (int i = 0; i < strides.length; i++) {
+    final hsize = hsizes[i];
+    final wsize = wsizes[i];
+    final stride = strides[i];
+    
+    for (int h = 0; h < hsize; h++) {
+      for (int w = 0; w < wsize; w++) {
+        grids.add([w.toDouble(), h.toDouble()]);
+        expandedStrides.add(stride.toDouble());
+      }
+    }
+  }
 
+  List<double> processedData = List.from(data);
+  final numAnchors = grids.length;
+  
+  for (int i = 0; i < numAnchors; i++) {
+    processedData[i * 85] = (data[i * 85] + grids[i][0]) * expandedStrides[i];
+    processedData[i * 85 + 1] = (data[i * 85 + 1] + grids[i][1]) * expandedStrides[i];
+    processedData[i * 85 + 2] = exp(data[i * 85 + 2]) * expandedStrides[i];
+    processedData[i * 85 + 3] = exp(data[i * 85 + 3]) * expandedStrides[i];
+  }
+
+  return processedData;
+}
   Future<void> runInference(cv.Mat paddedImg) async {
     // Load model
     final sessionOptions = OrtSessionOptions();
@@ -297,9 +338,9 @@ class _HomePageState extends State<HomePage> {
     final (processedImg, ratio) = preprocess(paddedImg, [640, 640]);
     final shape = [
       1,
+      3,
       640,
-      640,
-      3
+      640
     ]; // Batch size = 1, Channels = 3, Height = 640, Width = 640
     final flatList = processedImg.expand((c) => c.expand((h) => h)).toList();
     final inputOrt = OrtValueTensor.createTensorWithDataList(
@@ -308,8 +349,12 @@ class _HomePageState extends State<HomePage> {
     final runOptions = OrtRunOptions();
 
     final outputs = await session.runAsync(runOptions, inputs);
-    if (outputs != null) {}
-    print("Output names: ${outputs}");
+    if (outputs != null) {
+       final data = outputs[0]?.value;
+        final processedOutputs = demoPostprocess(outputs[0]!, [640, 640]);
+        print("First 10 elements of processed output: ${processedOutputs.take(10).toList()}");
+       
+    }
     inputOrt.release();
     runOptions.release();
     outputs?.forEach((element) {
