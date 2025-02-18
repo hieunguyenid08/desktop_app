@@ -286,48 +286,63 @@ class _HomePageState extends State<HomePage> {
 
     return (output, r);
   }
- List<double> demoPostprocess(OrtValue outputs, List<int> imgSize, {bool p6 = false}) {
-  // Correctly cast nested list structure
-  // final List<List<double>> nestedData = (outputs.value as List).cast<List<double>>();
-  // final List<double> data = nestedData[0]; // Get the first list
-  
-  // final List<int> strides = p6 ? [8, 16, 32, 64] : [8, 16, 32];
-   final List<double> data = (outputs.value as List<List<dynamic>>)[0].cast<double>();
-  
-  final List<int> strides = p6 ? [8, 16, 32, 64] : [8, 16, 32];
-  // Calculate grid sizes
-  final hsizes = strides.map((stride) => imgSize[0] ~/ stride).toList();
-  final wsizes = strides.map((stride) => imgSize[1] ~/ stride).toList();
-  
-  // Generate grids and strides
-  List<List<double>> grids = [];
-  List<double> expandedStrides = [];
-  
-  for (int i = 0; i < strides.length; i++) {
-    final hsize = hsizes[i];
-    final wsize = wsizes[i];
-    final stride = strides[i];
+//   List<List<List<double>>> demoPostprocess(List<List<List<double>>> tensorData, List<int> imgSize, {bool p6 = false}) {
+//   final List<int> strides = p6 ? [8, 16, 32, 64] : [8, 16, 32];
+//   final hsizes = strides.map((stride) => imgSize[0] ~/ stride).toList();
+//   final wsizes = strides.map((stride) => imgSize[1] ~/ stride).toList();
+
+//   List<List<double>> grids = [];
+//   List<List<double>> expandedStrides = [];
+
+//   for (int i = 0; i < strides.length; i++) {
+//     final hsize = hsizes[i];
+//     final wsize = wsizes[i];
+//     final stride = strides[i];
+
+//     // Create grid coordinates
+//     final xv = List<double>.generate(wsize, (i) => i.toDouble());
+//     final yv = List<double>.generate(hsize, (i) => i.toDouble());
     
-    for (int h = 0; h < hsize; h++) {
-      for (int w = 0; w < wsize; w++) {
-        grids.add([w.toDouble(), h.toDouble()]);
-        expandedStrides.add(stride.toDouble());
-      }
-    }
-  }
+//     // Create meshgrid
+//     final grid = List<List<double>>.generate(
+//       hsize * wsize,
+//       (index) => [
+//         xv[index % wsize],
+//         yv[index ~/ wsize]
+//       ],
+//     );
+    
+//     // Reshape and add to grids
+//         grids.addAll(grid);
 
-  List<double> processedData = List.from(data);
-  final numAnchors = grids.length;
-  
-  for (int i = 0; i < numAnchors; i++) {
-    processedData[i * 85] = (data[i * 85] + grids[i][0]) * expandedStrides[i];
-    processedData[i * 85 + 1] = (data[i * 85 + 1] + grids[i][1]) * expandedStrides[i];
-    processedData[i * 85 + 2] = exp(data[i * 85 + 2]) * expandedStrides[i];
-    processedData[i * 85 + 3] = exp(data[i * 85 + 3]) * expandedStrides[i];
-  }
+    
+//     // Create expanded strides
+//     final strideGrid = List<List<double>>.generate(
+//       hsize * wsize,
+//       (_) => [stride.toDouble()],
+//     );
+//     expandedStrides.addAll(strideGrid);
+//   }
 
-  return processedData;
-}
+//   // Concatenate grids and expanded strides
+//   final concatenatedGrids = grids.expand((x) => x).toList();
+//   final concatenatedStrides = expandedStrides.expand((x) => x).toList();
+
+//   // Apply transformations to outputs
+//   for (int i = 0; i < tensorData.length; i++) {
+//     for (int j = 0; j < tensorData[i].length; j++) {
+//       // Update first two dimensions
+//       tensorData[i][j][0] = (tensorData[i][j][0] + concatenatedGrids[j][0]) * concatenatedStrides[j][0];
+//       tensorData[i][j][1] = (tensorData[i][j][1] + concatenatedGrids[j][1]) * concatenatedStrides[j][0];
+      
+//       // Update next two dimensions
+//       tensorData[i][j][2] = exp(tensorData[i][j][2]) * concatenatedStrides[j][0];
+//       tensorData[i][j][3] = exp(tensorData[i][j][3]) * concatenatedStrides[j][0];
+//     }
+//   }
+
+//   return tensorData;
+// }
   Future<void> runInference(cv.Mat paddedImg) async {
     // Load model
     final sessionOptions = OrtSessionOptions();
@@ -350,11 +365,14 @@ class _HomePageState extends State<HomePage> {
 
     final outputs = await session.runAsync(runOptions, inputs);
     if (outputs != null) {
-       final data = outputs[0]?.value;
-        final processedOutputs = demoPostprocess(outputs[0]!, [640, 640]);
-        print("First 10 elements of processed output: ${processedOutputs.take(10).toList()}");
-       
-    }
+      final tensorData = outputs[0]?.value as List<List<List<double>>>;
+      
+
+
+
+      //final processedOutputs = demoPostprocess(tensorData, [640, 640]);
+      print("First 10 elements of processed output: ${tensorData}");
+   }
     inputOrt.release();
     runOptions.release();
     outputs?.forEach((element) {
