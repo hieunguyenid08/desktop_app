@@ -12,6 +12,9 @@ import 'package:flutter/services.dart' show rootBundle;
 import 'dart:math' show max;
 import 'dart:typed_data';
 import 'dart:math' show exp;
+import 'dart:math' as math;
+import 'package:image/image.dart' as img;
+import 'package:flutter_tesseract_ocr/flutter_tesseract_ocr.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -33,14 +36,14 @@ class _HomePageState extends State<HomePage> {
 
     player.open(
       Media(
-          'assets/video/Traffic Control CCTV.mp4'), // Thay đổi tên file theo video của bạn
+          'assets/video/pexels-taryn-elliott-5309381 (1080p).mp4'), // Thay đổi tên file theo video của bạn
       play: true,
     );
 
     // Khởi tạo video 2
     player2.open(
       Media(
-          'assets/video/pexels-taryn-elliott-5309381 (1080p).mp4'), // Thay đổi tên file theo video của bạn
+          'assets/video/assets/video/Traffic Control CCTV.mp4'), // Thay đổi tên file theo video của bạn
       play: true,
     );
   }
@@ -286,63 +289,171 @@ class _HomePageState extends State<HomePage> {
 
     return (output, r);
   }
-//   List<List<List<double>>> demoPostprocess(List<List<List<double>>> tensorData, List<int> imgSize, {bool p6 = false}) {
-//   final List<int> strides = p6 ? [8, 16, 32, 64] : [8, 16, 32];
-//   final hsizes = strides.map((stride) => imgSize[0] ~/ stride).toList();
-//   final wsizes = strides.map((stride) => imgSize[1] ~/ stride).toList();
 
-//   List<List<double>> grids = [];
-//   List<List<double>> expandedStrides = [];
+  List<List<List<double>>> demoPostprocess(
+      List<List<List<double>>> tensorData, List<int> imgSize,
+      {bool p6 = false}) {
+    final List<int> strides = p6 ? [8, 16, 32, 64] : [8, 16, 32];
+    final hsizes = strides.map((stride) => imgSize[0] ~/ stride).toList();
+    final wsizes = strides.map((stride) => imgSize[1] ~/ stride).toList();
 
-//   for (int i = 0; i < strides.length; i++) {
-//     final hsize = hsizes[i];
-//     final wsize = wsizes[i];
-//     final stride = strides[i];
+    List<List<double>> grids = [];
+    List<List<double>> expandedStrides = [];
 
-//     // Create grid coordinates
-//     final xv = List<double>.generate(wsize, (i) => i.toDouble());
-//     final yv = List<double>.generate(hsize, (i) => i.toDouble());
-    
-//     // Create meshgrid
-//     final grid = List<List<double>>.generate(
-//       hsize * wsize,
-//       (index) => [
-//         xv[index % wsize],
-//         yv[index ~/ wsize]
-//       ],
-//     );
-    
-//     // Reshape and add to grids
-//         grids.addAll(grid);
+    for (int i = 0; i < strides.length; i++) {
+      final hsize = hsizes[i];
+      final wsize = wsizes[i];
+      final stride = strides[i];
 
-    
-//     // Create expanded strides
-//     final strideGrid = List<List<double>>.generate(
-//       hsize * wsize,
-//       (_) => [stride.toDouble()],
-//     );
-//     expandedStrides.addAll(strideGrid);
-//   }
+      // Create grid coordinates
+      final xv = List<double>.generate(wsize, (i) => i.toDouble());
+      final yv = List<double>.generate(hsize, (i) => i.toDouble());
 
-//   // Concatenate grids and expanded strides
-//   final concatenatedGrids = grids.expand((x) => x).toList();
-//   final concatenatedStrides = expandedStrides.expand((x) => x).toList();
+      // Create meshgrid
+      final grid = List<List<double>>.generate(
+        hsize * wsize,
+        (index) => [xv[index % wsize], yv[index ~/ wsize]],
+      );
 
-//   // Apply transformations to outputs
-//   for (int i = 0; i < tensorData.length; i++) {
-//     for (int j = 0; j < tensorData[i].length; j++) {
-//       // Update first two dimensions
-//       tensorData[i][j][0] = (tensorData[i][j][0] + concatenatedGrids[j][0]) * concatenatedStrides[j][0];
-//       tensorData[i][j][1] = (tensorData[i][j][1] + concatenatedGrids[j][1]) * concatenatedStrides[j][0];
-      
-//       // Update next two dimensions
-//       tensorData[i][j][2] = exp(tensorData[i][j][2]) * concatenatedStrides[j][0];
-//       tensorData[i][j][3] = exp(tensorData[i][j][3]) * concatenatedStrides[j][0];
-//     }
-//   }
+      // Reshape and add to grids
+      grids.addAll(grid);
 
-//   return tensorData;
-// }
+      // Create expanded strides
+      final strideGrid = List<List<double>>.generate(
+        hsize * wsize,
+        (_) => [stride.toDouble()],
+      );
+      expandedStrides.addAll(strideGrid);
+    }
+
+    // Concatenate grids and expanded strides
+    //final concatenatedGrids = grids.expand((x) => x).toList();
+    //final concatenatedStrides = expandedStrides.expand((x) => x).toList();
+
+    // Apply transformations to outputs
+    for (int i = 0; i < tensorData.length; i++) {
+      for (int j = 0; j < tensorData[i].length; j++) {
+        // Update first two dimensions
+        tensorData[i][j][0] =
+            (tensorData[i][j][0] + grids[j][0]) * expandedStrides[j][0];
+        tensorData[i][j][1] =
+            (tensorData[i][j][1] + grids[j][1]) * expandedStrides[j][0];
+
+        // Update next two dimensions
+        tensorData[i][j][2] = exp(tensorData[i][j][2]) * expandedStrides[j][0];
+        tensorData[i][j][3] = exp(tensorData[i][j][3]) * expandedStrides[j][0];
+      }
+    }
+
+    return tensorData;
+  }
+
+  List<List<double>>? multiclassNmsClassAgnostic(
+      List<List<double>> boxes, List<List<double>> scores) {
+    const double nmsThr = 0.45;
+    const double scoreThr = 0.1;
+
+    // Tìm chỉ số class có điểm cao nhất cho mỗi box (tương đương scores.argmax(1))
+    final List<int> clsInds = List.generate(scores.length, (i) {
+      int maxIdx = 0;
+      double maxScore = scores[i][0];
+      for (int j = 1; j < scores[i].length; j++) {
+        if (scores[i][j] > maxScore) {
+          maxScore = scores[i][j];
+          maxIdx = j;
+        }
+      }
+      return maxIdx;
+    });
+
+    // Lấy điểm số cao nhất cho mỗi box
+    final List<double> clsScores =
+        List.generate(clsInds.length, (i) => scores[i][clsInds[i]]);
+
+    // Lọc các box có điểm số > score_thr
+    final List<int> validIndices = [];
+    for (int i = 0; i < clsScores.length; i++) {
+      if (clsScores[i] > scoreThr) {
+        validIndices.add(i);
+      }
+    }
+
+    if (validIndices.isEmpty) {
+      return null;
+    }
+
+    // Lấy các giá trị hợp lệ
+    final List<List<double>> validBoxes =
+        validIndices.map((i) => boxes[i]).toList();
+    final List<double> validScores =
+        validIndices.map((i) => clsScores[i]).toList();
+    final List<int> validClsInds = validIndices.map((i) => clsInds[i]).toList();
+
+    // Áp dụng NMS
+    final List<int> keep = nms(validBoxes, validScores);
+
+    if (keep.isNotEmpty) {
+      // Tạo kết quả cuối cùng
+      return keep
+          .map((i) => [
+                ...validBoxes[i], // box coordinates [x1, y1, x2, y2]
+                validScores[i], // score
+                validClsInds[i].toDouble(), // class index
+              ])
+          .toList();
+    }
+
+    return null;
+  }
+
+  List<int> nms(List<List<double>> boxes, List<double> scores) {
+    const double nmsThr = 0.45;
+    final List<int> keep = [];
+
+    // Tạo danh sách indices được sắp xếp theo điểm số giảm dần
+    final List<int> order = List.generate(scores.length, (i) => i)
+      ..sort((a, b) => scores[b].compareTo(scores[a]));
+
+    final List<double> areas = boxes.map((box) {
+      return (box[2] - box[0] + 1) * (box[3] - box[1] + 1);
+    }).toList();
+
+    while (order.isNotEmpty) {
+      final int i = order[0];
+      keep.add(i);
+
+      if (order.length == 1) break;
+
+      final List<int> remainingIndices = [];
+
+      for (int j = 1; j < order.length; j++) {
+        final int idx = order[j];
+
+        // Tính toán intersection
+        final double xx1 = math.max(boxes[i][0], boxes[idx][0]);
+        final double yy1 = math.max(boxes[i][1], boxes[idx][1]);
+        final double xx2 = math.min(boxes[i][2], boxes[idx][2]);
+        final double yy2 = math.min(boxes[i][3], boxes[idx][3]);
+
+        final double w = math.max(0.0, xx2 - xx1 + 1);
+        final double h = math.max(0.0, yy2 - yy1 + 1);
+        final double inter = w * h;
+
+        // Tính IoU
+        final double ovr = inter / (areas[i] + areas[idx] - inter);
+
+        if (ovr <= nmsThr) {
+          remainingIndices.add(idx);
+        }
+      }
+
+      order.clear();
+      order.addAll(remainingIndices);
+    }
+
+    return keep;
+  }
+
   Future<void> runInference(cv.Mat paddedImg) async {
     // Load model
     final sessionOptions = OrtSessionOptions();
@@ -366,13 +477,183 @@ class _HomePageState extends State<HomePage> {
     final outputs = await session.runAsync(runOptions, inputs);
     if (outputs != null) {
       final tensorData = outputs[0]?.value as List<List<List<double>>>;
-      
 
+      final processedOutputs = demoPostprocess(tensorData, [640, 640]);
+      // Assuming processedOutputs is List<List<List<double>>>
+      final predictions = processedOutputs[0];
 
+      // Extract boxes and scores
+      final boxes = predictions.map((pred) => pred.sublist(0, 4)).toList();
 
-      //final processedOutputs = demoPostprocess(tensorData, [640, 640]);
-      print("First 10 elements of processed output: ${tensorData}");
-   }
+      final scores = predictions.map((pred) {
+        return pred.sublist(5).map((value) => pred[4] * value).toList();
+      }).toList();
+
+      // Convert boxes to xyxy format
+      final boxesXyxy = List.generate(boxes.length, (_) => List.filled(4, 0.0));
+      for (int i = 0; i < boxes.length; i++) {
+        boxesXyxy[i][0] = boxes[i][0] - boxes[i][2] / 2.0;
+        boxesXyxy[i][1] = boxes[i][1] - boxes[i][3] / 2.0;
+        boxesXyxy[i][2] = boxes[i][0] + boxes[i][2] / 2.0;
+        boxesXyxy[i][3] = boxes[i][1] + boxes[i][3] / 2.0;
+      }
+
+      // Scale boxes by ratio
+      for (int i = 0; i < boxesXyxy.length; i++) {
+        for (int j = 0; j < 4; j++) {
+          boxesXyxy[i][j] /= ratio;
+        }
+      }
+
+      final dets = multiclassNmsClassAgnostic(boxesXyxy, scores);
+
+      // Thêm phần visualization
+      if (dets != null) {
+        // Tách boxes, scores và class indices từ dets
+        final finalBoxes = dets.map((det) => det.sublist(0, 4)).toList();
+        final finalScores = dets.map((det) => det[4]).toList();
+        final finalClsInds = dets.map((det) => det[5].toInt()).toList();
+
+        // Vẽ các detection lên ảnh
+        for (int i = 0; i < finalBoxes.length; i++) {
+          final box = finalBoxes[i];
+          final clsId = finalClsInds[i];
+          final score = finalScores[i];
+
+          if (score < 0.3) continue; // confidence threshold
+
+          // Convert coordinates to int
+          final x0 = box[0].toInt();
+          final y0 = box[1].toInt();
+          final x1 = box[2].toInt();
+          final y1 = box[3].toInt();
+
+          // Get color for current class
+          final color = _COLORS[clsId % _COLORS.length];
+          final colorScaled = [
+            (color[0] * 255).toInt(),
+            (color[1] * 255).toInt(),
+            (color[2] * 255).toInt()
+          ];
+
+          final text = '${names[clsId]}:${(score * 100).toStringAsFixed(1)}%';
+
+// Calculate text color based on mean color value
+          final txtColor = _COLORS[clsId].reduce((a, b) => a + b) / 3 > 0.5
+              ? cv.Scalar(0, 0, 0)
+              : cv.Scalar(255, 255, 255);
+
+// Get text size
+          final txtSize = cv.getTextSize(text, cv.FONT_HERSHEY_SIMPLEX, 0.4, 1);
+
+// Draw bounding box
+          cv.rectangle(
+              paddedImg,
+              cv.Rect(x0, y0, x1 - x0, y1 - y0),
+              cv.Scalar(colorScaled[0].toDouble(), colorScaled[1].toDouble(),
+                  colorScaled[2].toDouble()),
+              thickness: 2);
+
+          final txtBkColor = [
+            (color[0] * 255 * 0.7).toInt(),
+            (color[1] * 255 * 0.7).toInt(),
+            (color[2] * 255 * 0.7).toInt()
+          ];
+
+//Draw text background
+          cv.rectangle(
+              paddedImg,
+              cv.Rect(x0, y0 + 1, txtSize.$1.width + 1,
+                  (txtSize.$1.height * 1.5).toInt()),
+              cv.Scalar(txtBkColor[0].toDouble(), txtBkColor[1].toDouble(),
+                  txtBkColor[2].toDouble()),
+              thickness: -1);
+
+// Draw text
+          cv.putText(paddedImg, text, cv.Point(x0, y0 + txtSize.$1.height),
+              cv.FONT_HERSHEY_SIMPLEX, 0.4, txtColor,
+              thickness: 1);
+          final directory = Directory('assets/output');
+          if (!directory.existsSync()) {
+            directory.createSync(recursive: true);
+          }
+          //cv.imwrite('${directory.path}/imagedetected.jpg', paddedImg);
+          final safeX0 = math.max(0, x0);
+          final safeY0 = math.max(0, y0);
+          final safeX1 = math.min(paddedImg.cols, x1);
+          final safeY1 = math.min(paddedImg.rows, y1);
+
+          // Kiểm tra kích thước vùng cắt hợp lệ
+          if (safeX1 > safeX0 && safeY1 > safeY0) {
+            // Cắt đối tượng từ ảnh gốc
+            final objectROI = paddedImg.region(
+                cv.Rect(safeX0, safeY0, safeX1 - safeX0, safeY1 - safeY0));
+
+            // Tạo tên file duy nhất cho đối tượng
+            final objectFileName =
+                '${names[clsId]}_${DateTime.now().millisecondsSinceEpoch}_$i.jpg';
+
+            // Lưu ảnh đối tượng
+            cv.imwrite('${directory.path}/$objectFileName', objectROI);
+
+            // Ghi thông tin đối tượng vào file log
+            final logFile = File('${directory.path}/detection_log.txt');
+            final logEntry =
+                'Object: ${names[clsId]}, Confidence: ${(score * 100).toStringAsFixed(1)}%, '
+                'File: $objectFileName, Time: ${DateTime.now()}\n';
+
+            await logFile.writeAsString(
+              logEntry,
+              mode: FileMode.append,
+            );
+            try {
+              final String ocrText = await FlutterTesseractOcr.extractText(
+                '${directory.path}/$objectFileName',
+                // Hỗ trợ cả tiếng Việt và tiếng Anh
+                // args: {
+                //   "psm": "6", // Page segmentation mode
+                //   "preserve_interword_spaces": "1",
+                // });
+              );
+
+              if (ocrText.isNotEmpty) {
+                // Ghi kết quả OCR vào file log
+                final ocrLogFile = File('${directory.path}/ocr_results.txt');
+                final ocrLogEntry = 'File: $objectFileName\n'
+                    'Object Type: ${names[clsId]}\n'
+                    'Time: ${DateTime.now()}\n'
+                    'Detected Text:\n$ocrText\n'
+                    '----------------------------------------\n';
+
+                await ocrLogFile.writeAsString(
+                  ocrLogEntry,
+                  mode: FileMode.append,
+                );
+
+                // In kết quả OCR ra console để debug
+                print('OCR Result for $objectFileName:');
+                print(ocrText);
+              }
+            } catch (e) {
+              print('OCR Error for $objectFileName: $e');
+              // Ghi lỗi OCR vào file log
+              final errorLogFile = File('${directory.path}/ocr_errors.txt');
+              final errorEntry = 'File: $objectFileName\n'
+                  'Time: ${DateTime.now()}\n'
+                  'Error: $e\n'
+                  '----------------------------------------\n';
+
+              await errorLogFile.writeAsString(
+                errorEntry,
+                mode: FileMode.append,
+              );
+            }
+            // cắt ảnh
+          }
+        }
+      }
+    }
+
     inputOrt.release();
     runOptions.release();
     outputs?.forEach((element) {
@@ -402,15 +683,14 @@ class _HomePageState extends State<HomePage> {
       await file.writeAsBytes(resizedBytes);
 
       //xử lý model tại đây
-      setState(() {
-        final file = File('assets/image/screen1/anh3.jpg');
+      setState(() async {
         latestScreenshot1 = file.path;
         print("latestScreenshot1: ${latestScreenshot1}");
         if (File(file.path).existsSync()) {
-          final mat = cv.imread(file.path);
+          final mat = cv.imread(latestScreenshot1!);
           print("Image loaded successfully");
-          //final (processedImg, ratio) = preprocess(mat, [640, 640]);
-          runInference(mat);
+
+          await runInference(mat);
         } else {
           print("Error: Image file does not exist at path: ${file.path}");
         }
@@ -428,10 +708,7 @@ class _HomePageState extends State<HomePage> {
           },
         );
       }
-      // ... existing InfoBar code ...
-    } catch (e) {
-      // ... existing error handling ...
-    }
+    } catch (e) {}
   }
 
   Future<void> captureScreenshot2() async {
