@@ -468,13 +468,13 @@ class _HomePageState extends State<HomePage> {
 
   Future<String?> callOCRAPI(String imagePath) async {
     try {
-      // Tạo request multipart
+      
       var request = http.MultipartRequest(
         'POST',
-        Uri.parse('https://yolo12138-paddle-ocr-api.hf.space/ocr?lang=ch'),
+        Uri.parse('http://0.0.0.0:7860/ocr'),
       );
 
-      // Thêm headers
+     
       request.headers.addAll({
         'accept': 'application/json',
       });
@@ -494,9 +494,9 @@ class _HomePageState extends State<HomePage> {
 
       request.files.add(multipartFile);
 
-      // Gửi request và nhận response
+      
       final response = await request.send();
-      //final responseBody = await response.stream.bytesToString();
+     
 
       if (response.statusCode == 200) {
         final responseBody = await response.stream.bytesToString();
@@ -726,8 +726,8 @@ class _HomePageState extends State<HomePage> {
       });
 
       if (File(file.path).existsSync()) {
-        //var mat = cv.imread(latestScreenshot1!);
-        var mat = cv.imread('assets/image/screen1/0.jpg');
+        var mat = cv.imread(latestScreenshot1!);
+        //var mat = cv.imread('assets/image/screen1/xemay.jpg');
         print("Image loaded successfully");
         mat = cv.cvtColor(mat, cv.COLOR_BGR2RGB);
         await runInference(mat);
