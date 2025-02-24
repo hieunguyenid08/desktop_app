@@ -2,6 +2,7 @@ import 'package:fluent_ui/fluent_ui.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 import 'dart:io';
+import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import 'package:opencv_dart/opencv_dart.dart' as cv;
 import 'package:image/image.dart' show decodeImage, copyResize, encodeJpg;
@@ -15,6 +16,11 @@ import 'dart:math' show exp;
 import 'dart:math' as math;
 import 'package:image/image.dart' as img;
 import 'package:flutter_tesseract_ocr/flutter_tesseract_ocr.dart';
+import 'dart:convert';
+import 'package:http_parser/http_parser.dart';
+import 'package:flutter/rendering.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -25,6 +31,8 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   // Tạo thêm player và controller cho video thứ 2
+  late TextEditingController textController;
+
   late final player = Player();
   late final player2 = Player();
   late final controller = VideoController(player);
@@ -33,6 +41,7 @@ class _HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
+    textController = TextEditingController();
 
     player.open(
       Media(
@@ -50,11 +59,13 @@ class _HomePageState extends State<HomePage> {
 
   @override
   void dispose() {
+    textController.dispose();
     player.dispose();
     player2.dispose();
     super.dispose();
   }
 
+  String? ocrText;
   String? latestScreenshot1;
   String? latestScreenshot2;
   final List<String> names = [
@@ -220,6 +231,7 @@ class _HomePageState extends State<HomePage> {
     [0.314, 0.717, 0.741],
     [0.500, 0.500, 0.000]
   ];
+
   // Assuming input is a List<List<List<int>>> with shape (640, 640, 3)
   List<List<List<double>>> transposeMatrix(List<List<List<int>>> input) {
     int height = input.length;
@@ -454,6 +466,65 @@ class _HomePageState extends State<HomePage> {
     return keep;
   }
 
+  Future<String?> callOCRAPI(String imagePath) async {
+    try {
+      // Tạo request multipart
+      var request = http.MultipartRequest(
+        'POST',
+        Uri.parse('https://yolo12138-paddle-ocr-api.hf.space/ocr?lang=ch'),
+      );
+
+      // Thêm headers
+      request.headers.addAll({
+        'accept': 'application/json',
+      });
+
+      // Thêm file vào request
+      final file = File(imagePath);
+      final stream = http.ByteStream(file.openRead());
+      final length = await file.length();
+
+      final multipartFile = http.MultipartFile(
+        'file',
+        stream,
+        length,
+        filename: file.path.split('/').last,
+        contentType: MediaType('image', 'jpeg'),
+      );
+
+      request.files.add(multipartFile);
+
+      // Gửi request và nhận response
+      final response = await request.send();
+      //final responseBody = await response.stream.bytesToString();
+
+      if (response.statusCode == 200) {
+        final responseBody = await response.stream.bytesToString();
+        final List<dynamic> result = jsonDecode(responseBody);
+        if (result.isNotEmpty) {
+          final text = result[0]['txt'] as String;
+        
+          // Combine text and text2, keeping only numbers and uppercase letters
+          if (result.length > 1 && result[1]['txt'].isNotEmpty) {
+            final text2 = result[1]['txt'] as String;
+            final combinedText = text + text2;
+            // Use regular expression to keep only numbers and uppercase letters
+            final filteredText = combinedText.replaceAll(RegExp(r'[^A-Z0-9]'), '');
+            return filteredText;
+          }
+          
+          
+          // If text2 is empty, return text after filtering
+          return text.replaceAll(RegExp(r'[^A-Z0-9]'), '');
+        }
+        return null;
+      }
+    } catch (e) {
+      print('OCR API Error: $e');
+      return null;
+    }
+  }
+
   Future<void> runInference(cv.Mat paddedImg) async {
     // Load model
     final sessionOptions = OrtSessionOptions();
@@ -547,32 +618,12 @@ class _HomePageState extends State<HomePage> {
           final txtSize = cv.getTextSize(text, cv.FONT_HERSHEY_SIMPLEX, 0.4, 1);
 
 // Draw bounding box
-          cv.rectangle(
-              paddedImg,
-              cv.Rect(x0, y0, x1 - x0, y1 - y0),
-              cv.Scalar(colorScaled[0].toDouble(), colorScaled[1].toDouble(),
-                  colorScaled[2].toDouble()),
-              thickness: 2);
-
-          final txtBkColor = [
-            (color[0] * 255 * 0.7).toInt(),
-            (color[1] * 255 * 0.7).toInt(),
-            (color[2] * 255 * 0.7).toInt()
-          ];
-
-//Draw text background
-          cv.rectangle(
-              paddedImg,
-              cv.Rect(x0, y0 + 1, txtSize.$1.width + 1,
-                  (txtSize.$1.height * 1.5).toInt()),
-              cv.Scalar(txtBkColor[0].toDouble(), txtBkColor[1].toDouble(),
-                  txtBkColor[2].toDouble()),
-              thickness: -1);
-
-// Draw text
-          cv.putText(paddedImg, text, cv.Point(x0, y0 + txtSize.$1.height),
-              cv.FONT_HERSHEY_SIMPLEX, 0.4, txtColor,
-              thickness: 1);
+          // cv.rectangle(
+          //     paddedImg,
+          //     cv.Rect(x0, y0, x1 - x0, y1 - y0),
+          //     cv.Scalar(colorScaled[0].toDouble(), colorScaled[1].toDouble(),
+          //         colorScaled[2].toDouble()),
+          //     thickness: 2);
           final directory = Directory('assets/output');
           if (!directory.existsSync()) {
             directory.createSync(recursive: true);
@@ -584,7 +635,7 @@ class _HomePageState extends State<HomePage> {
           final safeY1 = math.min(paddedImg.rows, y1);
 
           // Kiểm tra kích thước vùng cắt hợp lệ
-          if (safeX1 > safeX0 && safeY1 > safeY0) {
+          if (safeX1 > safeX0 && safeY1 > safeY0 && i == 0) {
             // Cắt đối tượng từ ảnh gốc
             final objectROI = paddedImg.region(
                 cv.Rect(safeX0, safeY0, safeX1 - safeX0, safeY1 - safeY0));
@@ -606,49 +657,34 @@ class _HomePageState extends State<HomePage> {
               logEntry,
               mode: FileMode.append,
             );
-            try {
-              final String ocrText = await FlutterTesseractOcr.extractText(
-                '${directory.path}/$objectFileName',
-                // Hỗ trợ cả tiếng Việt và tiếng Anh
-                // args: {
-                //   "psm": "6", // Page segmentation mode
-                //   "preserve_interword_spaces": "1",
-                // });
-              );
+            // Tính toán màu nền của text
+            final txtBkColor = [
+              (color[0] * 255 * 0.7).toInt(),
+              (color[1] * 255 * 0.7).toInt(),
+              (color[2] * 255 * 0.7).toInt()
+            ];
 
-              if (ocrText.isNotEmpty) {
-                // Ghi kết quả OCR vào file log
-                final ocrLogFile = File('${directory.path}/ocr_results.txt');
-                final ocrLogEntry = 'File: $objectFileName\n'
-                    'Object Type: ${names[clsId]}\n'
-                    'Time: ${DateTime.now()}\n'
-                    'Detected Text:\n$ocrText\n'
-                    '----------------------------------------\n';
+//Draw text background
+            cv.rectangle(
+                paddedImg,
+                cv.Rect(x0, y0 + 1, txtSize.$1.width + 1,
+                    (txtSize.$1.height * 1.5).toInt()),
+                cv.Scalar(txtBkColor[0].toDouble(), txtBkColor[1].toDouble(),
+                    txtBkColor[2].toDouble()),
+                thickness: -1);
 
-                await ocrLogFile.writeAsString(
-                  ocrLogEntry,
-                  mode: FileMode.append,
-                );
+// Draw text
+            cv.putText(paddedImg, text, cv.Point(x0, y0 + txtSize.$1.height),
+                cv.FONT_HERSHEY_SIMPLEX, 0.4, txtColor,
+                thickness: 1);
 
-                // In kết quả OCR ra console để debug
-                print('OCR Result for $objectFileName:');
-                print(ocrText);
-              }
-            } catch (e) {
-              print('OCR Error for $objectFileName: $e');
-              // Ghi lỗi OCR vào file log
-              final errorLogFile = File('${directory.path}/ocr_errors.txt');
-              final errorEntry = 'File: $objectFileName\n'
-                  'Time: ${DateTime.now()}\n'
-                  'Error: $e\n'
-                  '----------------------------------------\n';
-
-              await errorLogFile.writeAsString(
-                errorEntry,
-                mode: FileMode.append,
-              );
+            //Gọi API OCR với đường dẫn ảnh
+            final ocrResult =
+                await callOCRAPI('${directory.path}/$objectFileName');
+            if (ocrResult != null) {
+              ocrText = ocrResult;
+           
             }
-            // cắt ảnh
           }
         }
       }
@@ -683,32 +719,44 @@ class _HomePageState extends State<HomePage> {
       await file.writeAsBytes(resizedBytes);
 
       //xử lý model tại đây
-      setState(() async {
+      setState(() {
         latestScreenshot1 = file.path;
-        print("latestScreenshot1: ${latestScreenshot1}");
-        if (File(file.path).existsSync()) {
-          final mat = cv.imread(latestScreenshot1!);
-          print("Image loaded successfully");
-
-          await runInference(mat);
-        } else {
-          print("Error: Image file does not exist at path: ${file.path}");
-        }
+        ocrText = null; // Reset text cũ
+        textController.text = ''; // Reset controller
       });
-      // Cập nhật state với đường dẫn ảnh mới
+
+      if (File(file.path).existsSync()) {
+        //var mat = cv.imread(latestScreenshot1!);
+        var mat = cv.imread('assets/image/screen1/0.jpg');
+        print("Image loaded successfully");
+        mat = cv.cvtColor(mat, cv.COLOR_BGR2RGB);
+        await runInference(mat);
+
+        // Cập nhật text mới
+        if (ocrText != null) {
+          setState(() {
+            textController.text = ocrText ?? '';
+            print("New OCR Text: $ocrText");
+          });
+        }
+      }
+
+      // Hiển thị thông báo
       if (mounted) {
         displayInfoBar(
           context,
           builder: (context, close) {
             return InfoBar(
               title: const Text('Thành công'),
-              content: Text('Đã lưu ảnh: ${file.path}'),
+              content: Text('Biển số xe: ${ocrText ?? "Không tìm thấy"}'),
               severity: InfoBarSeverity.success,
             );
           },
         );
       }
-    } catch (e) {}
+    } catch (e) {
+      print("Error in captureScreenshot1: $e");
+    }
   }
 
   Future<void> captureScreenshot2() async {
@@ -757,17 +805,16 @@ class _HomePageState extends State<HomePage> {
         padding: const EdgeInsets.all(20.0),
         child: Row(
           children: [
-            // Màn hình bên trái
             Expanded(
               child: Center(
                 child: FractionallySizedBox(
                   widthFactor: 0.6,
-                  heightFactor: 0.8, // Tăng heightFactor để có chỗ cho ảnh
+                  heightFactor: 0.8,
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Expanded(
-                        flex: 3, // Điều chỉnh tỷ lệ video
+                        flex: 3,
                         child: AspectRatio(
                           aspectRatio: 16 / 9,
                           child: Video(controller: controller),
@@ -779,15 +826,17 @@ class _HomePageState extends State<HomePage> {
                         onPressed: captureScreenshot1,
                       ),
                       const SizedBox(height: 10),
-                      // Hiển thị ảnh screenshot
-                      // if (latestScreenshot1 != null)
-                      //   Expanded(
-                      //     flex: 2, // Điều chỉnh tỷ lệ ảnh
-                      //     child: Image.file(
-                      //       File(latestScreenshot1!),
-                      //       fit: BoxFit.contain,
-                      //     ),
-                      //   ),
+                      // InfoLabel với TextBox
+                      InfoLabel(
+                        label: 'Biển số xe:',
+                        child: TextBox(
+                          readOnly: true,
+                          placeholder: 'Chưa có kết quả',
+                          controller:
+                              TextEditingController(text: ocrText ?? ''),
+                          expands: false,
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -798,32 +847,34 @@ class _HomePageState extends State<HomePage> {
               child: Center(
                 child: FractionallySizedBox(
                   widthFactor: 0.6,
-                  heightFactor: 0.8, // Tăng heightFactor để có chỗ cho ảnh
+                  heightFactor: 0.8,
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Expanded(
-                        flex: 3, // Điều chỉnh tỷ lệ video
+                        flex: 3,
                         child: AspectRatio(
                           aspectRatio: 16 / 9,
-                          child: Video(controller: controller2),
+                          child: Video(controller: controller),
                         ),
                       ),
                       const SizedBox(height: 10),
                       Button(
-                        child: const Text('Chụp ảnh Video 2'),
-                        onPressed: captureScreenshot2,
+                        child: const Text('Chụp ảnh Video 1'),
+                        onPressed: captureScreenshot1,
                       ),
                       const SizedBox(height: 10),
-                      // Hiển thị ảnh screenshot
-                      if (latestScreenshot2 != null)
-                        Expanded(
-                          flex: 2, // Điều chỉnh tỷ lệ ảnh
-                          child: Image.file(
-                            File(latestScreenshot2!),
-                            fit: BoxFit.contain,
-                          ),
+                      // InfoLabel với TextBox
+                      InfoLabel(
+                        label: 'Biển số xe:',
+                        child: TextBox(
+                          readOnly: true,
+                          placeholder: 'Chưa có kết quả',
+                          controller:
+                              TextEditingController(text: ocrText ?? ''),
+                          expands: false,
                         ),
+                      ),
                     ],
                   ),
                 ),
