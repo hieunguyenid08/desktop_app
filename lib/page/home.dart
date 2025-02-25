@@ -29,6 +29,14 @@ class HomePage extends StatefulWidget {
   State<HomePage> createState() => _HomePageState();
 }
 
+// Tạo class để lưu kết quả OCR
+class OCRResult {
+  final String text;
+  final double score;
+
+  OCRResult(this.text, this.score);
+}
+
 class _HomePageState extends State<HomePage> {
   // Tạo thêm player và controller cho video thứ 2
   late TextEditingController textController;
@@ -48,7 +56,11 @@ class _HomePageState extends State<HomePage> {
           'assets/video/pexels-taryn-elliott-5309381 (1080p).mp4'), // Thay đổi tên file theo video của bạn
       play: true,
     );
-
+    //  player.open(
+    //   Media(
+    //       'assets/video/Automatic Number Plate Recognition (ANPR) _ Vehicle Number Plate Recognition (1).mp4'), // Thay đổi tên file theo video của bạn
+    //   play: true,
+    // );
     // Khởi tạo video 2
     player2.open(
       Media(
@@ -466,15 +478,16 @@ class _HomePageState extends State<HomePage> {
     return keep;
   }
 
-  Future<String?> callOCRAPI(String imagePath) async {
+  Future<OCRResult?> callOCRAPI(String imagePath) async {
     try {
-      
       var request = http.MultipartRequest(
         'POST',
-        Uri.parse('http://0.0.0.0:7860/ocr'),
+        //Uri.parse('http://192.168.1.115:8003/plate-recognition/file'),
+        //Uri.parse('http://0.0.0.0:7860/ocr'), run local
+        Uri.parse('https://yolo12138-paddle-ocr-api.hf.space/ocr?lang=ch'),
       );
 
-     
+      // Thêm headers
       request.headers.addAll({
         'accept': 'application/json',
       });
@@ -494,33 +507,60 @@ class _HomePageState extends State<HomePage> {
 
       request.files.add(multipartFile);
 
-      
+      // Gửi request và nhận response
       final response = await request.send();
-     
+      
 
+      //   if (response.statusCode == 200) {
+      //     final responseBody = await response.stream.bytesToString();
+      //     print('Response body: $responseBody');
+      //     // Parse JSON response
+      //     final Map<String, dynamic> jsonResponse = jsonDecode(responseBody);
+      //     // Kiểm tra status và result
+      //     if (jsonResponse['status'] == 200 &&
+      //         jsonResponse['message'] == 'success' &&
+      //         jsonResponse['result'] != null) {
+      //       final result = jsonResponse['result'] as Map<String, dynamic>;
+      //       final plateText = result['text_plate'] as String;
+      //       // Lọc chỉ giữ lại số và chữ in hoa
+      //       return plateText;
+      //     }
+      //   }
+      //   return null;
+      // } catch (e) {
+      //   print('Plate Recognition API Error: $e');
+      //   return null;
+      // }
       if (response.statusCode == 200) {
         final responseBody = await response.stream.bytesToString();
-        final List<dynamic> result = jsonDecode(responseBody);
-        if (result.isNotEmpty) {
-          final text = result[0]['txt'] as String;
-        
-          // Combine text and text2, keeping only numbers and uppercase letters
-          if (result.length > 1 && result[1]['txt'].isNotEmpty) {
-            final text2 = result[1]['txt'] as String;
-            final combinedText = text + text2;
-            // Use regular expression to keep only numbers and uppercase letters
-            final filteredText = combinedText.replaceAll(RegExp(r'[^A-Z0-9]'), '');
-            return filteredText;
+       
+
+        // Parse JSON response thành List
+        final List<dynamic> results = jsonDecode(responseBody);
+
+        if (results.isNotEmpty) {
+          // Lấy text từ cả hai kết quả nếu có
+          final text1 = results[0]['txt'] as String;
+          String combinedText = text1;
+          final score1 = results[0]['score'] as double;
+
+          double averageScore = score1;
+
+          // Nếu có kết quả thứ hai, thêm vào
+          if (results.length > 1) {
+            final text2 = results[1]['txt'] as String;
+            combinedText = text1 + text2;
+            final score2 = results[1]['score'] as double;
+            averageScore = (score1 + score2) / 2; // Tính điểm trung bình
           }
-          
-          
-          // If text2 is empty, return text after filtering
-          return text.replaceAll(RegExp(r'[^A-Z0-9]'), '');
+
+          // Lọc chỉ giữ lại số và chữ in hoa
+          return OCRResult(combinedText, averageScore);
         }
-        return null;
       }
+      return null;
     } catch (e) {
-      print('OCR API Error: $e');
+      print('Plate Recognition API Error: $e');
       return null;
     }
   }
@@ -600,22 +640,22 @@ class _HomePageState extends State<HomePage> {
           final y1 = box[3].toInt();
 
           // Get color for current class
-          final color = _COLORS[clsId % _COLORS.length];
-          final colorScaled = [
-            (color[0] * 255).toInt(),
-            (color[1] * 255).toInt(),
-            (color[2] * 255).toInt()
-          ];
+          //final color = _COLORS[clsId % _COLORS.length];
+          // final colorScaled = [
+          //   (color[0] * 255).toInt(),
+          //   (color[1] * 255).toInt(),
+          //   (color[2] * 255).toInt()
+          // ];
 
-          final text = '${names[clsId]}:${(score * 100).toStringAsFixed(1)}%';
+          //final text = '${names[clsId]}:${(score * 100).toStringAsFixed(1)}%';
 
 // Calculate text color based on mean color value
-          final txtColor = _COLORS[clsId].reduce((a, b) => a + b) / 3 > 0.5
-              ? cv.Scalar(0, 0, 0)
-              : cv.Scalar(255, 255, 255);
+//           final txtColor = _COLORS[clsId].reduce((a, b) => a + b) / 3 > 0.5
+//               ? cv.Scalar(0, 0, 0)
+//               : cv.Scalar(255, 255, 255);
 
-// Get text size
-          final txtSize = cv.getTextSize(text, cv.FONT_HERSHEY_SIMPLEX, 0.4, 1);
+// // Get text size
+//           final txtSize = cv.getTextSize(text, cv.FONT_HERSHEY_SIMPLEX, 0.4, 1);
 
 // Draw bounding box
           // cv.rectangle(
@@ -648,42 +688,44 @@ class _HomePageState extends State<HomePage> {
             cv.imwrite('${directory.path}/$objectFileName', objectROI);
 
             // Ghi thông tin đối tượng vào file log
-            final logFile = File('${directory.path}/detection_log.txt');
-            final logEntry =
-                'Object: ${names[clsId]}, Confidence: ${(score * 100).toStringAsFixed(1)}%, '
-                'File: $objectFileName, Time: ${DateTime.now()}\n';
+            // final logFile = File('${directory.path}/detection_log.txt');
+            // final logEntry =
+            //     'Object: ${names[clsId]}, Confidence: ${(score * 100).toStringAsFixed(1)}%, '
+            //     'File: $objectFileName, Time: ${DateTime.now()}\n';
 
-            await logFile.writeAsString(
-              logEntry,
-              mode: FileMode.append,
-            );
+            // await logFile.writeAsString(
+            //   logEntry,
+            //   mode: FileMode.append,
+            // );
             // Tính toán màu nền của text
-            final txtBkColor = [
-              (color[0] * 255 * 0.7).toInt(),
-              (color[1] * 255 * 0.7).toInt(),
-              (color[2] * 255 * 0.7).toInt()
-            ];
+            // final txtBkColor = [
+            //   (color[0] * 255 * 0.7).toInt(),
+            //   (color[1] * 255 * 0.7).toInt(),
+            //   (color[2] * 255 * 0.7).toInt()
+            // ];
 
-//Draw text background
-            cv.rectangle(
-                paddedImg,
-                cv.Rect(x0, y0 + 1, txtSize.$1.width + 1,
-                    (txtSize.$1.height * 1.5).toInt()),
-                cv.Scalar(txtBkColor[0].toDouble(), txtBkColor[1].toDouble(),
-                    txtBkColor[2].toDouble()),
-                thickness: -1);
+// //Draw text background
+//             cv.rectangle(
+//                 paddedImg,
+//                 cv.Rect(x0, y0 + 1, txtSize.$1.width + 1,
+//                     (txtSize.$1.height * 1.5).toInt()),
+//                 cv.Scalar(txtBkColor[0].toDouble(), txtBkColor[1].toDouble(),
+//                     txtBkColor[2].toDouble()),
+//                 thickness: -1);
 
-// Draw text
-            cv.putText(paddedImg, text, cv.Point(x0, y0 + txtSize.$1.height),
-                cv.FONT_HERSHEY_SIMPLEX, 0.4, txtColor,
-                thickness: 1);
+// // Draw text
+//             cv.putText(paddedImg, text, cv.Point(x0, y0 + txtSize.$1.height),
+//                 cv.FONT_HERSHEY_SIMPLEX, 0.4, txtColor,
+//                 thickness: 1);
 
             //Gọi API OCR với đường dẫn ảnh
             final ocrResult =
                 await callOCRAPI('${directory.path}/$objectFileName');
             if (ocrResult != null) {
-              ocrText = ocrResult;
-           
+              //ocrText = ocrResult;
+              ocrText =
+                  '${ocrResult.text} (Confidence: ${(ocrResult.score * 100).toStringAsFixed(2)}%)';
+              textController.text = ocrText ?? '';
             }
           }
         }
@@ -699,47 +741,47 @@ class _HomePageState extends State<HomePage> {
 
   //capture picture from video 1
   Future<void> captureScreenshot1() async {
-    try {
-      final screenshot = await player.screenshot();
-      if (screenshot == null) throw 'Không thể chụp ảnh';
+    final screenshot = await player.screenshot();
+    if (screenshot == null) throw 'Không thể chụp ảnh';
 
-      // Resize ảnh về 640x640 sử dụng package image
-      final originalImage = decodeImage(screenshot);
-      final resizedImage = copyResize(originalImage!, width: 640, height: 640);
-      final resizedBytes = encodeJpg(resizedImage);
+    // Resize ảnh về 640x640 sử dụng package image
+    final originalImage = decodeImage(screenshot);
+    final resizedImage = copyResize(originalImage!, width: 640, height: 640);
+    final resizedBytes = encodeJpg(resizedImage);
 
-      final directory = Directory('assets/image/screen1');
-      if (!directory.existsSync()) {
-        directory.createSync(recursive: true);
+    final directory = Directory('assets/image/screen1');
+    if (!directory.existsSync()) {
+      directory.createSync(recursive: true);
+    }
+
+    final fileName = 'screenshot2_${DateTime.now().millisecondsSinceEpoch}.jpg';
+    final file = File('${directory.path}/$fileName');
+    await file.writeAsBytes(resizedBytes);
+
+    //xử lý model tại đây
+    setState(() {
+      latestScreenshot1 = file.path;
+      ocrText = null; // Reset text cũ
+      textController.text = ''; // Reset controller
+    });
+
+    if (File(file.path).existsSync()) {
+      var mat = cv.imread(latestScreenshot1!);
+      //var mat = cv.imread('assets/image/screen1/0.jpg');
+      print("Image loaded successfully");
+      mat = cv.cvtColor(mat, cv.COLOR_BGR2RGB);
+      await runInference(mat);
+      // final ocrResult = await callOCRAPI(latestScreenshot1!);
+      // if (ocrResult != null) {
+      //   ocrText = ocrResult;
+      //   // Cập nhật text mới
+      if (ocrText != null) {
+        setState(() {
+          textController.text = ocrText ?? '';
+          print("New OCR Text: $ocrText");
+        });
       }
-
-      final fileName =
-          'screenshot2_${DateTime.now().millisecondsSinceEpoch}.jpg';
-      final file = File('${directory.path}/$fileName');
-      await file.writeAsBytes(resizedBytes);
-
-      //xử lý model tại đây
-      setState(() {
-        latestScreenshot1 = file.path;
-        ocrText = null; // Reset text cũ
-        textController.text = ''; // Reset controller
-      });
-
-      if (File(file.path).existsSync()) {
-        var mat = cv.imread(latestScreenshot1!);
-        //var mat = cv.imread('assets/image/screen1/xemay.jpg');
-        print("Image loaded successfully");
-        mat = cv.cvtColor(mat, cv.COLOR_BGR2RGB);
-        await runInference(mat);
-
-        // Cập nhật text mới
-        if (ocrText != null) {
-          setState(() {
-            textController.text = ocrText ?? '';
-            print("New OCR Text: $ocrText");
-          });
-        }
-      }
+      // }
 
       // Hiển thị thông báo
       if (mounted) {
@@ -747,15 +789,15 @@ class _HomePageState extends State<HomePage> {
           context,
           builder: (context, close) {
             return InfoBar(
+              // title: const Text('Thành công'),
+              // content: Text('Biển số xe: ${ocrText ?? "Không tìm thấy"}'),
               title: const Text('Thành công'),
-              content: Text('Biển số xe: ${ocrText ?? "Không tìm thấy"}'),
+              content: Text('Kết quả OCR: ${ocrText ?? "Không tìm thấy"}'),
               severity: InfoBarSeverity.success,
             );
           },
         );
       }
-    } catch (e) {
-      print("Error in captureScreenshot1: $e");
     }
   }
 
